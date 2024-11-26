@@ -76,18 +76,22 @@ static void s32k3x8evb_init(MachineState *machine)
     DeviceState *armv7m;
 
      /* Initialize CPU (Cortex-M7) */
+     //This function initializes the CPU (Cortex-M7) as a child object of the board (s), which is represented by the structure S32K3X8EVBState.
     object_initialize_child(OBJECT(s), "armv7m", &s->armv7m, TYPE_ARMV7M);
+    //This line casts the armv7m object (which was initialized as part of S32K3X8EVBState) to a DeviceState type, which is a common type for all devices in QEMU.
     armv7m = DEVICE(&s->armv7m);
-    
-    
+    //This function connects the system clock (s->sysclk) to the CPU (armv7m), which allows the CPU to run at the specified frequency.
     qdev_connect_clock_in(armv7m, "cpuclk", s->sysclk);
+    // This function sets a property of the CPU device (armv7m). Specifically, it sets the cpu-type property to the CPU type defined in the machine.
     qdev_prop_set_string(armv7m, "cpu-type", machine->cpu_type);
+    //This function sets a property of the CPU to enable a feature (in this case, the ARM bit-banding feature).
     qdev_prop_set_bit(armv7m, "enable-bitband", true);
+    //This sets the memory property of the CPU to point to the system memory, meaning that the CPU will use the system memory region to fetch instructions and data.
     object_property_set_link(OBJECT(&s->armv7m), "memory",
                              OBJECT(get_system_memory()), &err);
+    //This function finalizes the initialization of the CPU and ensures it is properly connected to the system bus so that it can interact with other devices.
     sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), &err);
-    
-    
+    /*This function assigns the parent bus for the device (armv7m) to the system bus. The parent bus connects the CPU to the rest of the system, allowing it to interact with other devices and memory regions.*/
     qdev_set_parent_bus(DEVICE(&s->armv7m), sysbus_get_default(), &err);
 
     /* Initialize system clock */
@@ -138,4 +142,5 @@ static void s32k3x8evb_machine_init(MachineClass *mc)
     mc->default_ram_size = SRAM0_SIZE + SRAM1_SIZE + SRAM2_SIZE;  // Total SRAM size
 }
 
+//Registration of the board 
 DEFINE_MACHINE("s32k3x8evb", s32k3x8evb_machine_init)
