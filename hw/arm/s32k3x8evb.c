@@ -1,14 +1,23 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
-#include "hw/arm/arm.h"
+#include "hw/arm/armv7m.h"
+//#include "hw/arm/arm.h"
 #include "hw/arm/boot.h"
 #include "hw/sysbus.h"
-#include "hw/char/serial.h"
-#include "hw/net/can.h"
+//#include "hw/char/serial.h"
+//#include "hw/net/can.h"
 #include "hw/boards.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/qtest.h"
 #include "exec/address-spaces.h"
+#include "qemu/units.h"
+#include "qemu/cutils.h"
+#include "qemu/error-report.h"
+#include "hw/boards.h"
+#include "hw/qdev-clock.h"
+#include "qapi/qmp/qlist.h"
+#include "qom/object.h"
+#include "hw/qdev-properties.h"
 
 /* Base addresses and sizes */
 #define FLASH_BASE    0x00400000
@@ -63,11 +72,23 @@ static void s32k3x8evb_init(MachineState *machine)
 {
     S32K3X8EVBState *s = S32K3X8EVB(machine);
     Error *err = NULL;
+    
+    DeviceState *armv7m;
 
-    /* Initialize CPU */
-    const char *cpu_model = machine->cpu_model ? machine->cpu_model : "cortex-m7";
-    DeviceState *cpu = qemu_init_cpu(cpu_model);  // Initialize the Cortex-M7 CPU state
-    qdev_set_parent_bus(cpu, sysbus_get_default());
+     /* Initialize CPU (Cortex-M7) */
+    object_initialize_child(OBJECT(s), "armv7m", &s->armv7m, TYPE_ARMV7M);
+    armv7m = DEVICE(&s->armv7m);
+    
+    
+    qdev_connect_clock_in(armv7m, "cpuclk", s->sysclk);
+    qdev_prop_set_string(armv7m, "cpu-type", machine->cpu_type);
+    qdev_prop_set_bit(armv7m, "enable-bitband", true);
+    object_property_set_link(OBJECT(&s->armv7m), "memory",
+                             OBJECT(get_system_memory()), &err);
+    sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), &err);
+    
+    
+    qdev_set_parent_bus(DEVICE(&s->armv7m), sysbus_get_default(), &err);
 
     /* Initialize system clock */
     s->sysclk = clock_new(OBJECT(machine), "SYSCLK");
@@ -98,13 +119,13 @@ static void s32k3x8evb_init(MachineState *machine)
     memory_region_add_subregion(get_system_memory(), SRAM2_BASE, &s->sram2);
 
     /* Initialize UART */
-    s->uart = sysbus_create_simple("pl011", UART_BASE, NULL);
+   // s->uart = sysbus_create_simple("pl011", UART_BASE, NULL);
 
     /* Initialize CAN */
-    s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
+    //s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
 
     /* Load firmware into Flash */
-    armv7m_load_kernel(ARM_CPU(cpu), machine->kernel_filename, 0, FLASH_SIZE);
+    armv7m_load_kernel(ARM_CPU(armv7m), machine->kernel_filename, 0, FLASH_SIZE);
 }
 
 
