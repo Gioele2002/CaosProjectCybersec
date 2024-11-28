@@ -44,11 +44,11 @@
 #define SYSCLK_FRQ    160000000ULL // System clock frequency (160 MHz)
 
 /* Machine state and class structure */
-typedef struct S32K3X8EVBClass {
+typedef struct S32K3X8EVBMachineClass {
     MachineClass parent_class;
-} S32K3X8EVBClass;
+} S32K3X8EVBMachineClass;
 
-typedef struct S32K3X8EVBState {
+typedef struct S32K3X8EVBMachineState {
     MachineState parent;
     //Cpu state
     ARMv7MState armv7m;
@@ -65,16 +65,16 @@ typedef struct S32K3X8EVBState {
     
     //Clock
     Clock *sysclk;
-} S32K3X8EVBState;
+} S32K3X8EVBMachineState;
 
-#define TYPE_S32K3X8EVB "s32k3x8evb"
-OBJECT_DECLARE_TYPE(S32K3X8EVBState, S32K3X8EVBClass,S32K3X8EVB)
+#define TYPE_S32K3X8EVB_MACHINE "s32k3x8evb-machine"
+OBJECT_DECLARE_TYPE(S32K3X8EVBMachineState, S32K3X8EVBMachineClass, S32K3X8EVB_MACHINE)
 
 
 /* Initialization function for the board */
 static void s32k3x8evb_init(MachineState *machine)
 {
-    S32K3X8EVBState *s = S32K3X8EVB(machine);
+    S32K3X8EVBMachineState *s = S32K3X8EVB_MACHINE(machine);
     Error *err = NULL;
     
     DeviceState *armv7m;
@@ -151,7 +151,6 @@ static void s32k3x8evb_class_init(ObjectClass *oc, void *data)
     mc->desc = "NXP S32K348 EVB Board";
     mc->init = s32k3x8evb_init;
     mc->max_cpus = 1;
-    mc->default_cpu_type = "cortex-m7";
     mc->default_ram_size = SRAM0_SIZE + SRAM1_SIZE + SRAM2_SIZE;
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-m7");
     mc->valid_cpu_types = valid_cpu_types;
@@ -160,11 +159,11 @@ static void s32k3x8evb_class_init(ObjectClass *oc, void *data)
 }
 
 static const TypeInfo s32k3x8evb_info = {
-    .name = TYPE_S32K3X8EVB,
+    .name = TYPE_S32K3X8EVB_MACHINE,
     .parent = TYPE_MACHINE,
-    .abstract = true,
-    .instance_size = sizeof(S32K3X8EVBState),
-    .class_size = sizeof(S32K3X8EVBClass),
+    .abstract = false,
+    .instance_size = sizeof(S32K3X8EVBMachineState),
+    .class_size = sizeof(S32K3X8EVBMachineClass),
     .class_init = s32k3x8evb_class_init,
 };
 
