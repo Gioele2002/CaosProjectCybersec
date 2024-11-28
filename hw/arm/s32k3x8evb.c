@@ -43,7 +43,11 @@
 
 #define SYSCLK_FRQ    160000000ULL // System clock frequency (160 MHz)
 
-/* Machine state structure */
+/* Machine state and class structure */
+typedef struct S32K3X8EVBClass {
+    MachineClass parent_class;
+} S32K3X8EVBClass;
+
 typedef struct S32K3X8EVBState {
     MachineState parent;
     //Cpu state
@@ -64,7 +68,7 @@ typedef struct S32K3X8EVBState {
 } S32K3X8EVBState;
 
 #define TYPE_S32K3X8EVB "s32k3x8evb"
-OBJECT_DECLARE_SIMPLE_TYPE(S32K3X8EVBState, S32K3X8EVB)
+OBJECT_DECLARE_TYPE(S32K3X8EVBState, S32K3X8EVBClass,S32K3X8EVB)
 
 
 /* Initialization function for the board */
@@ -134,13 +138,41 @@ static void s32k3x8evb_init(MachineState *machine)
 
 
 /* Machine registration function */
-static void s32k3x8evb_machine_init(MachineClass *mc)
+static void s32k3x8evb_class_init(ObjectClass *oc, void *data)
 {
+    MachineClass *mc = MACHINE_CLASS(oc);
+   // S32K3X8EVBClass *smc = S32K3X8EVB_CLASS(oc);
+     static const char * const valid_cpu_types[] = {
+        ARM_CPU_TYPE_NAME("cortex-m7"),
+        NULL
+    };
+    
+
     mc->desc = "NXP S32K348 EVB Board";
     mc->init = s32k3x8evb_init;
+    mc->max_cpus = 1;
     mc->default_cpu_type = "cortex-m7";
-    mc->default_ram_size = SRAM0_SIZE + SRAM1_SIZE + SRAM2_SIZE;  // Total SRAM size
+    mc->default_ram_size = SRAM0_SIZE + SRAM1_SIZE + SRAM2_SIZE;
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-m7");
+    mc->valid_cpu_types = valid_cpu_types;
+    
+   
+}
+
+static const TypeInfo s32k3x8evb_info = {
+    .name = TYPE_S32K3X8EVB,
+    .parent = TYPE_MACHINE,
+    .abstract = true,
+    .instance_size = sizeof(S32K3X8EVBState),
+    .class_size = sizeof(S32K3X8EVBClass),
+    .class_init = s32k3x8evb_class_init,
+};
+
+static void s32k3x8evb_machine_init(void)
+{
+  type_register_static(&s32k3x8evb_info);
 }
 
 //Registration of the board 
-DEFINE_MACHINE("s32k3x8evb", s32k3x8evb_machine_init)
+type_init(s32k3x8evb_machine_init);
+
