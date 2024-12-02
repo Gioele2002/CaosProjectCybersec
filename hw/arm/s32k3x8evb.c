@@ -19,57 +19,12 @@
 #include "qom/object.h"
 #include "hw/qdev-properties.h"
 #include "qemu/units.h"
+#include "hw/arm/s32k3x8evb.h"
 
-/* Base addresses and sizes */
-#define FLASH_BASE    0x00000000
-#define FLASH_SIZE    0x00800000 // 8 MB
-
-#define SRAM0_BASE    0x20400000
-#define SRAM0_SIZE    0x00040000  // 256 KB
-
-#define SRAM1_BASE    0x20440000
-#define SRAM1_SIZE    0x00040000  // 256 KB
-
-#define SRAM2_BASE    0x20480000
-#define SRAM2_SIZE    0x00040000  // 256 KB
-
-#define ITCM_BASE     0x00000000
-#define ITCM_SIZE     0x00020000  // 128 KB
-
-#define DTCM_BASE     0x20000000
-#define DTCM_SIZE     0x00040000  // 256 KB
-
-#define UART_BASE     0x4006A000
-#define CAN_BASE      0x40024000
-
-#define SYSCLK_FRQ    160000000ULL // System clock frequency (160 MHz)
-
-/* Machine state and class structure */
-typedef struct S32K3X8EVBMachineClass {
-    MachineClass parent_class;
-} S32K3X8EVBMachineClass;
-
-typedef struct S32K3X8EVBMachineState {
-    MachineState parent;
-    //Cpu state
-    ARMv7MState armv7m;
-    MemoryRegion flash;
-    MemoryRegion itcm;
-    MemoryRegion dtcm;
-    MemoryRegion sram0;
-    MemoryRegion sram1;
-    MemoryRegion sram2;
-    
-    //Uart, Can
-    DeviceState *uart;
-    DeviceState *can;
-    
-    //Clock
-    Clock *sysclk;
-} S32K3X8EVBMachineState;
 
 #define TYPE_S32K3X8EVB_MACHINE "s32k3x8evb-machine"
 OBJECT_DECLARE_TYPE(S32K3X8EVBMachineState, S32K3X8EVBMachineClass, S32K3X8EVB_MACHINE)
+
 
 
 /* Initialization function for the board */
@@ -150,7 +105,7 @@ static void s32k3x8evb_class_init(ObjectClass *oc, void *data)
     mc->desc = "NXP S32K348 EVB Board";
     mc->init = s32k3x8evb_init;
     mc->max_cpus = 1;
-    mc->default_ram_size = 1152 * KiB;
+    mc->default_ram_size = 3 * SRAM0_SIZE;
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-m7");
     mc->valid_cpu_types = valid_cpu_types;
     
