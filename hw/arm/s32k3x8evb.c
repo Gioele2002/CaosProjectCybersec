@@ -5,6 +5,7 @@
 #include "hw/arm/boot.h"
 #include "hw/sysbus.h"
 //#include "hw/char/serial.h"
+#include "hw/arm/s32k3x8evb_uart.h"
 //#include "hw/net/can.h"
 #include "hw/boards.h"
 #include "sysemu/sysemu.h"
@@ -81,7 +82,12 @@ static void s32k3x8evb_init(MachineState *machine)
     qdev_set_parent_bus(DEVICE(&s->armv7m), sysbus_get_default(), &err);
 
     /* Initialize UART */
-   // s->uart = sysbus_create_simple("pl011", UART_BASE, NULL);
+   
+    /* Initialize UART */
+    s->uart = sysbus_create_simple(TYPE_S32K3X8EVB_UART, S32K3X8EVB_UART0_BASE, NULL); 
+    s32k3x8evb_uart_realize(s->uart,&err); 
+
+    //UART0_TransmitString("UART Initialized Successfully.\n");
 
     /* Initialize CAN */
     //s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
