@@ -12,6 +12,9 @@
 #define S32K3X8EVB_UART_CTRL    (S32K3X8EVB_UART0_BASE + 0x18)
 #define S32K3X8EVB_UART_DATA    (S32K3X8EVB_UART0_BASE + 0x1C)
 #define S32K3X8EVB_UART_STAT    (S32K3X8EVB_UART0_BASE + 0x14)
+#define UART_STATUS_TX_COMPLETE (1 << 0) // Example: TX complete flag
+#define UART_CTRL_INTERRUPT_ENABLE (1 << 1) // Example: Interrupt enable bit
+
 
 // Define the UART device structure
 typedef struct S32K3X8EVBUartState {
@@ -21,6 +24,9 @@ typedef struct S32K3X8EVBUartState {
     uint32_t control;
     uint32_t status;
     uint32_t data;
+    FILE *output;
+    qemu_irq irq; // Add interrupt line
+    bool interrupt_enabled;  
     // Consider adding:
     // - Interrupt signals (e.g., qemu_irq irq)
     // - Receive buffer (if needed)

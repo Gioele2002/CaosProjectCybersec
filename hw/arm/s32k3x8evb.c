@@ -1,10 +1,8 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "hw/arm/armv7m.h"
-//#include "hw/arm/arm.h"
 #include "hw/arm/boot.h"
 #include "hw/sysbus.h"
-//#include "hw/char/serial.h"
 #include "hw/arm/s32k3x8evb_uart.h"
 //#include "hw/net/can.h"
 #include "hw/boards.h"
@@ -21,6 +19,7 @@
 #include "hw/qdev-properties.h"
 #include "qemu/units.h"
 #include "hw/arm/s32k3x8evb.h"
+#include "qemu/log.h"
 
 
 #define TYPE_S32K3X8EVB_MACHINE "s32k3x8evb-machine"
@@ -86,6 +85,14 @@ static void s32k3x8evb_init(MachineState *machine)
     /* Initialize UART */
     s->uart = sysbus_create_simple(TYPE_S32K3X8EVB_UART, S32K3X8EVB_UART0_BASE, NULL); 
     s32k3x8evb_uart_realize(s->uart,&err); 
+
+    /* Initialize UART Interrupt */
+   qdev_init_gpio_out(DEVICE(s->uart), &s->irq, 1);
+   /* Connect the UART's IRQ to the system bus */
+   sysbus_connect_irq(SYS_BUS_DEVICE(s->uart), 0, s->irq);
+
+ // Connect the UART device to the interrupt line of the board
+
 
     //UART0_TransmitString("UART Initialized Successfully.\n");
 

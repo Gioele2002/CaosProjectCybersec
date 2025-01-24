@@ -39,7 +39,7 @@
 #define DTCM_BASE     0x20000000
 #define DTCM_SIZE     0x00040000  // 256 KB
 
-#define UART_BASE     0x4006A000
+#define UART_BASE     0x40328000
 #define CAN_BASE      0x40024000
 
 #define SYSCLK_FRQ    160000000ULL // System clock frequency (160 MHz)
@@ -63,6 +63,7 @@ typedef struct S32K3X8EVBMachineState {
     //Uart, Can
     DeviceState *uart;
     DeviceState *can;
+    qemu_irq irq;
     
     //Clock
     Clock *sysclk;
