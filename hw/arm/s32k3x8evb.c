@@ -40,26 +40,58 @@ static void s32k3x8evb_init(MachineState *machine)
     clock_set_hz(s->sysclk, SYSCLK_FRQ);
     /* Initialize Flash memory */
     memory_region_init_rom(&s->flash, NULL, "s32k3x8evb.flash", FLASH_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), FLASH_BASE, &s->flash);
     /* Initialize ITCM */
+    err = NULL;
     memory_region_init_ram(&s->itcm, NULL, "s32k3x8evb.itcm", ITCM_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), ITCM_BASE, &s->itcm);
 
     /* Initialize DTCM */
+    err = NULL;
     memory_region_init_ram(&s->dtcm, NULL, "s32k3x8evb.dtcm", DTCM_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), DTCM_BASE, &s->dtcm);
 
     /* Initialize SRAM0 */
+    err = NULL;
     memory_region_init_ram(&s->sram0, NULL, "s32k3x8evb.sram0", SRAM0_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), SRAM0_BASE, &s->sram0);
 
     /* Initialize SRAM1 */
+    err = NULL;
     memory_region_init_ram(&s->sram1, NULL, "s32k3x8evb.sram1", SRAM1_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), SRAM1_BASE, &s->sram1);
 
     /* Initialize SRAM2 */
+    err = NULL;
     memory_region_init_ram(&s->sram2, NULL, "s32k3x8evb.sram2", SRAM2_SIZE, &err);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
     memory_region_add_subregion(get_system_memory(), SRAM2_BASE, &s->sram2);
+
+  
+
 
      /* Initialize CPU (Cortex-M7) */
      //This function initializes the CPU (Cortex-M7) as a child object of the board (s), which is represented by the structure S32K3X8EVBState.
@@ -73,12 +105,43 @@ static void s32k3x8evb_init(MachineState *machine)
     //This function sets a property of the CPU to enable a feature (in this case, the ARM bit-banding feature).
     qdev_prop_set_bit(armv7m, "enable-bitband", true);
     //This sets the memory property of the CPU to point to the system memory, meaning that the CPU will use the system memory region to fetch instructions and data.
+    err = NULL;
     object_property_set_link(OBJECT(&s->armv7m), "memory",
                              OBJECT(get_system_memory()), &err);
+
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
+
+        /* Initialize Vector Table and Stack Pointer */
+object_property_set_uint(OBJECT(&s->armv7m), "init-svtor", SRAM0_BASE, &err);
+if (err) {
+    error_report_err(err);
+    return;
+}
+
+
     //This function finalizes the initialization of the CPU and ensures it is properly connected to the system bus so that it can interact with other devices.
+    err = NULL;
     sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), &err);
+
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
+
     /*This function assigns the parent bus for the device (armv7m) to the system bus. The parent bus connects the CPU to the rest of the system, allowing it to interact with other devices and memory regions.*/
+    err = NULL;
     qdev_set_parent_bus(DEVICE(&s->armv7m), sysbus_get_default(), &err);
+
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
+
+
+
 
     /* Initialize UART */
    
@@ -100,7 +163,15 @@ static void s32k3x8evb_init(MachineState *machine)
     //s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
 
     /* Load firmware into Flash */
-    armv7m_load_kernel(ARM_CPU(first_cpu), machine->kernel_filename, 0, FLASH_SIZE);
+    err = NULL;
+    armv7m_load_kernel(ARM_CPU(first_cpu), machine->kernel_filename, FLASH_BASE, FLASH_SIZE);
+    if (err) {
+        error_report_err(err);
+        return;   // Stop execution if an error occurs
+    }
+
+    
+    
 }
 
 
