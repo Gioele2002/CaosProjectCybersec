@@ -2,102 +2,117 @@
 #include "hw/sysbus.h"
 #include "qemu/units.h"
 #include "qemu/error-report.h"
-#include "qemu/log.h" 
+#include "qemu/log.h"
 #include "hw/irq.h"
 
-// Define the read and write operations for MemoryRegionOps
+/* UART MMIO Operations */
 static const MemoryRegionOps s32k3x8evb_uart_ops = {
     .read = s32k3x8evb_uart_read,
     .write = s32k3x8evb_uart_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
-// UART interrupt handler for TX
+/* UART TX Interrupt */
 static void uart_tx_interrupt(S32K3X8EVBUartState *s) {
     if (s->interrupt_enabled && (s->status & UART_STATUS_TX_COMPLETE)) {
-        qemu_irq_pulse(s->irq); // Trigger interrupt
+        qemu_set_irq(s->irq, 1); // Assert IRQ
         qemu_log_mask(LOG_UNIMP, "UART interrupt triggered (status: 0x%x)\n", s->status);
     }
 }
 
-
-
-// Read and write functions for UART
- uint64_t s32k3x8evb_uart_read(void *opaque, hwaddr addr, unsigned size)
-{
+/* Read Function */
+uint64_t s32k3x8evb_uart_read(void *opaque, hwaddr addr, unsigned size) {
     S32K3X8EVBUartState *s = opaque;
 
     switch (addr) {
-        case S32K3X8EVB_UART_BAUD:
+        case 0x10: // BAUD RATE
             return s->baud_rate;
-        case S32K3X8EVB_UART_CTRL:
+        case 0x18: // CONTROL
             return s->control;
-        case S32K3X8EVB_UART_STAT:
-            return s->status;
-        case S32K3X8EVB_UART_DATA:
+        case 0x14: // STATUS
+            qemu_log_mask(LOG_UNIMP, "UART STATUS READ at 0x%" PRIx64 ": 0x%x\n", addr, s->status);
+            return s->status;  // ✅ Ensure it returns TX_COMPLETE if set
+        case 0x1C: // DATA (Dummy read)
             return s->data;
         default:
+            qemu_log_mask(LOG_GUEST_ERROR, "Invalid UART read at address 0x%" PRIx64 "\n", addr);
             return 0;
     }
 }
 
- void s32k3x8evb_uart_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+
+
+/* Write Function */
+void s32k3x8evb_uart_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     S32K3X8EVBUartState *s = opaque;
-      qemu_log_mask(LOG_UNIMP, "UART write: addr=0x%" PRIx64 ", val=0x%" PRIx64 "\n", addr, val);
+    
+    qemu_log_mask(LOG_UNIMP, "UART WRITE: addr=0x%" PRIx64 ", val=0x%" PRIx64 "\n", addr, val);
 
     switch (addr) {
-        case S32K3X8EVB_UART_BAUD:
+        case 0x10: // BAUD RATE
             s->baud_rate = val;
             break;
-        case S32K3X8EVB_UART_CTRL:
+
+        case 0x18: // CONTROL
             s->control = val;
             s->interrupt_enabled = (val & UART_CTRL_INTERRUPT_ENABLE) != 0;
             break;
-        case S32K3X8EVB_UART_STAT:
-            s->status = val;
-            break;
-        case S32K3X8EVB_UART_DATA:
+
+        case 0x1C: // DATA (Transmit)
             s->data = val;
-             if (s->output) {
-                fputc((char)val, s->output); // Send character to the output
-                fflush(s->output);          // Ensure immediate output
+            
+            qemu_log_mask(LOG_UNIMP, "UART OUTPUT: %c\n", (char)val);
+
+            if (s->output) {
+                fputc((char)val, s->output);
+                fflush(s->output);
             }
-            s->status |= UART_STATUS_TX_COMPLETE; // Set TX complete flag
-            uart_tx_interrupt(s); // Trigger the interrupt
-           
+
+            // ✅ **Set TX_COMPLETE Flag**
+            s->status |= UART_STATUS_TX_COMPLETE;
+            uart_tx_interrupt(s);  // Trigger IRQ if enabled
             break;
+
+        case 0x14: // STATUS (Clear TX_COMPLETE)
+            qemu_log_mask(LOG_UNIMP, "Clearing TX_COMPLETE flag\n");
+            s->status &= ~UART_STATUS_TX_COMPLETE; // ✅ **Clear TX_COMPLETE when written**
+            break;
+
         default:
-         qemu_log_mask(LOG_UNIMP, "Invalid UART write address: 0x%" PRIx64 "\n", addr);
+            qemu_log_mask(LOG_UNIMP, "Invalid UART write address: 0x%" PRIx64 "\n", addr);
             break;
     }
 }
 
-// Initialize the custom UART device
- void s32k3x8evb_uart_realize(DeviceState *dev, Error **errp)
-{
+
+
+/* UART Initialization */
+void s32k3x8evb_uart_realize(DeviceState *dev, Error **errp) {
     S32K3X8EVBUartState *s = S32K3X8EVB_UART(dev);
-    s->baud_rate = 115200; // Default baud rate
+    s->baud_rate = 115200;
     s->control = 0;
-    s->status = 0;
+    s->status = UART_STATUS_TX_COMPLETE;  // Ensure TX is ready initially
     s->data = 0;
-    s->output = stdout; // Set output to stdout
+    s->output = stdout;
 
-    // Initialize and add the MMIO region
-    memory_region_init_io(&s->mem, NULL, &s32k3x8evb_uart_ops, (SysBusDevice *)s, "s32k3x8evb_uart", sizeof(S32K3X8EVBUartState)); 
-    sysbus_init_mmio(SYS_BUS_DEVICE(s), &s->mem); 
-
-    sysbus_init_irq(SYS_BUS_DEVICE(s), &s->irq); // Initialize IRQ line
+    // Initialize MMIO region (Ensure size is correct!)
+    memory_region_init_io(&s->mem, OBJECT(s), &s32k3x8evb_uart_ops, s,
+                          "s32k3x8evb_uart", 0x1000);
+    sysbus_init_mmio(SYS_BUS_DEVICE(s), &s->mem);
+    sysbus_init_irq(SYS_BUS_DEVICE(s), &s->irq); 
+    /* Ensure correct UART memory mapping */
+    sysbus_mmio_map(SYS_BUS_DEVICE(s), 0, S32K3X8EVB_UART0_BASE);
 }
 
-// Define the device class
- void s32k3x8evb_uart_class_init(ObjectClass *klass, void *data)
-{
+
+/* Device Class Initialization */
+ void s32k3x8evb_uart_class_init(ObjectClass *klass, void *data) {
     DeviceClass *dc = DEVICE_CLASS(klass);
     dc->realize = s32k3x8evb_uart_realize;
 }
 
-// Define the device class type
+/* Register Device Type */
 static const TypeInfo s32k3x8evb_uart_class_info = {
     .name = TYPE_S32K3X8EVB_UART,
     .parent = TYPE_SYS_BUS_DEVICE,
@@ -105,9 +120,8 @@ static const TypeInfo s32k3x8evb_uart_class_info = {
     .class_init = s32k3x8evb_uart_class_init,
 };
 
-// Register the device type
-static void s32k3x8evb_uart_register_types(void)
-{
+/* Register the UART */
+static void s32k3x8evb_uart_register_types(void) {
     type_register_static(&s32k3x8evb_uart_class_info);
 }
 

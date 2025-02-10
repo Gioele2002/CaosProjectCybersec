@@ -115,11 +115,11 @@ static void s32k3x8evb_init(MachineState *machine)
     }
 
         /* Initialize Vector Table and Stack Pointer */
-object_property_set_uint(OBJECT(&s->armv7m), "init-svtor", SRAM0_BASE, &err);
-if (err) {
-    error_report_err(err);
-    return;
-}
+    object_property_set_uint(OBJECT(&s->armv7m), "init-svtor", SRAM0_BASE, &err);
+    if (err) {
+        error_report_err(err);
+        return;
+    }
 
 
     //This function finalizes the initialization of the CPU and ensures it is properly connected to the system bus so that it can interact with other devices.
@@ -140,24 +140,23 @@ if (err) {
         return;   // Stop execution if an error occurs
     }
 
+   /* Initialize UART */
+    s->uart = sysbus_create_simple(TYPE_S32K3X8EVB_UART, S32K3X8EVB_UART0_BASE, NULL);
 
+    /* Map UART MMIO to the correct address */
+    sysbus_mmio_map(SYS_BUS_DEVICE(s->uart), 0, S32K3X8EVB_UART0_BASE);
 
-
-    /* Initialize UART */
-   
-    /* Initialize UART */
-    s->uart = sysbus_create_simple(TYPE_S32K3X8EVB_UART, S32K3X8EVB_UART0_BASE, NULL); 
-    s32k3x8evb_uart_realize(s->uart,&err); 
+    s32k3x8evb_uart_realize(s->uart, &err);
+    if (err) {
+        error_report_err(err);
+        return;
+    }
 
     /* Initialize UART Interrupt */
-   qdev_init_gpio_out(DEVICE(s->uart), &s->irq, 1);
-   /* Connect the UART's IRQ to the system bus */
-   sysbus_connect_irq(SYS_BUS_DEVICE(s->uart), 0, s->irq);
-
- // Connect the UART device to the interrupt line of the board
+    qdev_init_gpio_out(DEVICE(s->uart), &s->irq, 1);
+    qemu_log_mask(LOG_UNIMP, "UART initialized with IRQ\n");
 
 
-    //UART0_TransmitString("UART Initialized Successfully.\n");
 
     /* Initialize CAN */
     //s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
