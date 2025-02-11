@@ -4,7 +4,7 @@
 #include "hw/arm/boot.h"
 #include "hw/sysbus.h"
 #include "hw/arm/s32k3x8evb_uart.h"
-//#include "hw/net/can.h"
+#include "hw/arm/s32k3x8evb_can.h"
 #include "hw/boards.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/qtest.h"
@@ -90,8 +90,6 @@ static void s32k3x8evb_init(MachineState *machine)
     }
     memory_region_add_subregion(get_system_memory(), SRAM2_BASE, &s->sram2);
 
-  
-
 
      /* Initialize CPU (Cortex-M7) */
      //This function initializes the CPU (Cortex-M7) as a child object of the board (s), which is represented by the structure S32K3X8EVBState.
@@ -140,26 +138,23 @@ static void s32k3x8evb_init(MachineState *machine)
         return;   // Stop execution if an error occurs
     }
 
+
    /* Initialize UART */
     s->uart = sysbus_create_simple(TYPE_S32K3X8EVB_UART, S32K3X8EVB_UART0_BASE, NULL);
-
-    /* Map UART MMIO to the correct address */
-    sysbus_mmio_map(SYS_BUS_DEVICE(s->uart), 0, S32K3X8EVB_UART0_BASE);
-
-    s32k3x8evb_uart_realize(s->uart, &err);
-    if (err) {
-        error_report_err(err);
-        return;
-    }
 
     /* Initialize UART Interrupt */
     qdev_init_gpio_out(DEVICE(s->uart), &s->irq, 1);
     qemu_log_mask(LOG_UNIMP, "UART initialized with IRQ\n");
-
-
+    
 
     /* Initialize CAN */
-    //s->can = sysbus_create_simple("can_sja1000", CAN_BASE, NULL);
+    s->can = sysbus_create_simple(TYPE_S32K3X8EVB_CAN, S32K3X8EVB_CAN0_BASE, NULL);
+
+
+    /* Initialize CAN Interrupt */
+    qdev_init_gpio_out(DEVICE(s->can), &s->irq, 1);
+    qemu_log_mask(LOG_UNIMP, "CAN initialized with IRQ\n");
+
 
     /* Load firmware into Flash */
     err = NULL;
@@ -168,9 +163,6 @@ static void s32k3x8evb_init(MachineState *machine)
         error_report_err(err);
         return;   // Stop execution if an error occurs
     }
-
-    
-    
 }
 
 

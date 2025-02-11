@@ -39,5 +39,6 @@ OBJECT_DECLARE_TYPE(S32K3X8EVBCanState, s32k3x8evb_can, S32K3X8EVB_CAN)
 uint64_t s32k3x8evb_can_read(void *opaque, hwaddr addr, unsigned size);
 void s32k3x8evb_can_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
 void s32k3x8evb_can_realize(DeviceState *dev, Error **errp);
+void s32k3x8evb_can_class_init(ObjectClass *klass, void *data);
 
 #endif /* HW_ARM_S32K3X8EVB_CAN_H */

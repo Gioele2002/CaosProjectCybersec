@@ -1,5 +1,8 @@
 arm_ss = ss.source_set()
 arm_ss.add(files('boot.c'))
+arm_ss.add(files('s32k3x8evb.c'))
+arm_ss.add(files('s32k3x8evb_uart.c'))
+arm_ss.add(files('s32k3x8evb_can.c'))
 arm_ss.add(when: 'CONFIG_ARM_VIRT', if_true: files('virt.c'))
 arm_ss.add(when: 'CONFIG_ACPI', if_true: files('virt-acpi-build.c'))
 arm_ss.add(when: 'CONFIG_DIGIC', if_true: files('digic_boards.c'))
@@ -73,3 +76,5 @@ system_ss.add(when: 'CONFIG_VERSATILE', if_true: files('versatilepb.c'))
 system_ss.add(when: 'CONFIG_VEXPRESS', if_true: files('vexpress.c'))
 
 hw_arch += {'arm': arm_ss}
+
+

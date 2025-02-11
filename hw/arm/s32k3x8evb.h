@@ -65,7 +65,6 @@ typedef struct S32K3X8EVBMachineState {
     MemoryRegion sram0;
     MemoryRegion sram1;
     MemoryRegion sram2;
-    MemoryRegion sram_nc;   // Non-cacheable SRAM
 
     /* Peripherals */
     DeviceState *uart;
