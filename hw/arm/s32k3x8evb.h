@@ -69,6 +69,7 @@ typedef struct S32K3X8EVBMachineState {
     /* Peripherals */
     DeviceState *uart;
     DeviceState *can;
+    DeviceState *mpu;
     qemu_irq irq;
 
     /* Clock */

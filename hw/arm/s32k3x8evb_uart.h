@@ -27,10 +27,6 @@ typedef struct S32K3X8EVBUartState {
     FILE *output;
     qemu_irq irq; // Add interrupt line
     bool interrupt_enabled;  
-    // Consider adding:
-    // - Interrupt signals (e.g., qemu_irq irq)
-    // - Receive buffer (if needed)
-    // - Transmit buffer (if needed)
 } S32K3X8EVBUartState;
 
 #define TYPE_S32K3X8EVB_UART "s32k3x8evb_uart"

@@ -5,6 +5,7 @@
 #include "hw/sysbus.h"
 #include "hw/arm/s32k3x8evb_uart.h"
 #include "hw/arm/s32k3x8evb_can.h"
+#include "hw/arm/s32k3x8evb_mpu.h"
 #include "hw/boards.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/qtest.h"
@@ -144,7 +145,7 @@ static void s32k3x8evb_init(MachineState *machine)
 
     /* Initialize UART Interrupt */
     qdev_init_gpio_out(DEVICE(s->uart), &s->irq, 1);
-    qemu_log_mask(LOG_UNIMP, "UART initialized with IRQ\n");
+    qemu_log( "UART initialized with IRQ\n");
     
 
     /* Initialize CAN */
@@ -153,7 +154,16 @@ static void s32k3x8evb_init(MachineState *machine)
 
     /* Initialize CAN Interrupt */
     qdev_init_gpio_out(DEVICE(s->can), &s->irq, 1);
-    qemu_log_mask(LOG_UNIMP, "CAN initialized with IRQ\n");
+    qemu_log("CAN initialized with IRQ\n");
+
+
+    /* ✅ Initialize MPU */
+    s->mpu = sysbus_create_simple(TYPE_S32K3X8EVB_MPU, S32K3X8EVB_MPU_BASE, NULL);
+
+
+    /* Initialize MPU Interrupt */
+    qdev_init_gpio_out(DEVICE(s->mpu), &s->irq, 1);
+    qemu_log("MPU Initialized with IRQ\n");
 
 
     /* Load firmware into Flash */

@@ -20,7 +20,7 @@ uint64_t s32k3x8evb_can_read(void *opaque, hwaddr addr, unsigned size) {
             return s->mcr;
         case 0x04:
             return s->ctrl;
-        case 0x08:  // ✅ Status Register
+        case 0x08:  // Status Register
             qemu_log_mask(LOG_UNIMP, "🔍 Reading CAN STATUS: 0x%08X\n",(uint32_t) s->status);
             return s->status | CAN_STATUS_TX_READY;  // Ensure TX_READY is always set
         case 0x10:
@@ -58,18 +58,18 @@ void s32k3x8evb_can_write(void *opaque, hwaddr addr, uint64_t val, unsigned size
         case 0x10:  // TX Buffer
             s->txbuf = val;
 
-            // ✅ Ensure TX is marked READY
+            // Ensure TX is marked READY
             s->status |= CAN_STATUS_TX_READY;
             qemu_log_mask(LOG_UNIMP, "✅ CAN TX_READY FLAG SET in QEMU: 0x%08X\n", (uint32_t)s->status);
 
-            // ✅ Simulate Loopback Mode if Enabled
+            // Simulate Loopback Mode if Enabled
             if (s->ctrl & CAN_CTRL_LOOPBACK) {
                 s->rxbuf = val;
                 s->status |= CAN_STATUS_RX_READY;
                 qemu_log_mask(LOG_UNIMP, "✅ Loopback Mode: RXBUF = 0x%08X\n", (uint32_t)s->rxbuf);
             }
 
-            // ✅ Trigger Interrupt (if enabled)
+            // Trigger Interrupt (if enabled)
             qemu_set_irq(s->can_irq, 1);
             break;
 
