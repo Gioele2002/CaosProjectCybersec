@@ -14,9 +14,11 @@
 #include "qemu/units.h"
 #include "qemu/error-report.h"
 #include "qapi/error.h"
+#include "qapi/qmp/qerror.h"
 #include "hw/hw.h"
 #include "hw/nvram/fw_cfg.h"
 #include "pci.h"
+#include "pci-quirks.h"
 #include "trace.h"
 
 /*
@@ -59,43 +61,41 @@
  */
 static int igd_gen(VFIOPCIDevice *vdev)
 {
-    if ((vdev->device_id & 0xfff) == 0xa84) {
-        return 8; /* Broxton */
+    /*
+     * Device IDs for Broxton/Apollo Lake are 0x0a84, 0x1a84, 0x1a85, 0x5a84
+     * and 0x5a85, match bit 11:1 here
+     * Prefix 0x0a is taken by Haswell, this rule should be matched first.
+     */
+    if ((vdev->device_id & 0xffe) == 0xa84) {
+        return 9;
     }
 
     switch (vdev->device_id & 0xff00) {
-    /* Old, untested, unavailable, unknown */
-    case 0x0000:
-    case 0x2500:
-    case 0x2700:
-    case 0x2900:
-    case 0x2a00:
-    case 0x2e00:
-    case 0x3500:
-    case 0xa000:
-        return -1;
-    /* SandyBridge, IvyBridge, ValleyView, Haswell */
-    case 0x0100:
-    case 0x0400:
-    case 0x0a00:
-    case 0x0c00:
-    case 0x0d00:
-    case 0x0f00:
+    case 0x0100:    /* SandyBridge, IvyBridge */
         return 6;
-    /* BroadWell, CherryView, SkyLake, KabyLake */
-    case 0x1600:
-    case 0x1900:
-    case 0x2200:
-    case 0x5900:
+    case 0x0400:    /* Haswell */
+    case 0x0a00:    /* Haswell */
+    case 0x0c00:    /* Haswell */
+    case 0x0d00:    /* Haswell */
+    case 0x0f00:    /* Valleyview/Bay Trail */
+        return 7;
+    case 0x1600:    /* Broadwell */
+    case 0x2200:    /* Cherryview */
         return 8;
-    /* CoffeeLake */
-    case 0x3e00:
+    case 0x1900:    /* Skylake */
+    case 0x3100:    /* Gemini Lake */
+    case 0x5900:    /* Kaby Lake */
+    case 0x3e00:    /* Coffee Lake */
+    case 0x9B00:    /* Comet Lake */
         return 9;
-    /* ElkhartLake */
-    case 0x4500:
+    case 0x8A00:    /* Ice Lake */
+    case 0x4500:    /* Elkhart Lake */
+    case 0x4E00:    /* Jasper Lake */
         return 11;
-    /* TigerLake */
-    case 0x9A00:
+    case 0x9A00:    /* Tiger Lake */
+    case 0x4C00:    /* Rocket Lake */
+    case 0x4600:    /* Alder Lake */
+    case 0xA700:    /* Raptor Lake */
         return 12;
     }
 
@@ -116,6 +116,53 @@ typedef struct VFIOIGDQuirk {
 #define IGD_BDSM 0x5c /* Base Data of Stolen Memory */
 #define IGD_BDSM_GEN11 0xc0 /* Base Data of Stolen Memory of gen 11 and later */
 
+#define IGD_GMCH_GEN6_GMS_SHIFT     3       /* SNB_GMCH in i915 */
+#define IGD_GMCH_GEN6_GMS_MASK      0x1f
+#define IGD_GMCH_GEN6_GGMS_SHIFT    8
+#define IGD_GMCH_GEN6_GGMS_MASK     0x3
+#define IGD_GMCH_GEN8_GMS_SHIFT     8       /* BDW_GMCH in i915 */
+#define IGD_GMCH_GEN8_GMS_MASK      0xff
+#define IGD_GMCH_GEN8_GGMS_SHIFT    6
+#define IGD_GMCH_GEN8_GGMS_MASK     0x3
+
+static uint64_t igd_gtt_memory_size(int gen, uint16_t gmch)
+{
+    uint64_t ggms;
+
+    if (gen < 8) {
+        ggms = (gmch >> IGD_GMCH_GEN6_GGMS_SHIFT) & IGD_GMCH_GEN6_GGMS_MASK;
+    } else {
+        ggms = (gmch >> IGD_GMCH_GEN8_GGMS_SHIFT) & IGD_GMCH_GEN8_GGMS_MASK;
+        if (ggms != 0) {
+            ggms = 1ULL << ggms;
+        }
+    }
+
+    return ggms * MiB;
+}
+
+static uint64_t igd_stolen_memory_size(int gen, uint32_t gmch)
+{
+    uint64_t gms;
+
+    if (gen < 8) {
+        gms = (gmch >> IGD_GMCH_GEN6_GMS_SHIFT) & IGD_GMCH_GEN6_GMS_MASK;
+    } else {
+        gms = (gmch >> IGD_GMCH_GEN8_GMS_SHIFT) & IGD_GMCH_GEN8_GMS_MASK;
+    }
+
+    if (gen < 9) {
+            return gms * 32 * MiB;
+    } else {
+        if (gms < 0xf0) {
+            return gms * 32 * MiB;
+        } else {
+            return (gms - 0xf0 + 1) * 4 * MiB;
+        }
+    }
+
+    return 0;
+}
 
 /*
  * The rather short list of registers that we copy from the host devices.
@@ -264,17 +311,10 @@ static int vfio_pci_igd_lpc_init(VFIOPCIDevice *vdev,
 static int vfio_igd_gtt_max(VFIOPCIDevice *vdev)
 {
     uint32_t gmch = vfio_pci_read_config(&vdev->pdev, IGD_GMCH, sizeof(gmch));
-    int ggms, gen = igd_gen(vdev);
+    int gen = igd_gen(vdev);
+    uint64_t ggms_size = igd_gtt_memory_size(gen, gmch);
 
-    gmch = vfio_pci_read_config(&vdev->pdev, IGD_GMCH, sizeof(gmch));
-    ggms = (gmch >> (gen < 8 ? 8 : 6)) & 0x3;
-    if (gen > 6) {
-        ggms = 1 << ggms;
-    }
-
-    ggms *= MiB;
-
-    return (ggms / (4 * KiB)) * (gen < 8 ? 4 : 8);
+    return (ggms_size / (4 * KiB)) * (gen < 8 ? 4 : 8);
 }
 
 /*
@@ -383,69 +423,13 @@ static const MemoryRegionOps vfio_igd_index_quirk = {
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
-#define IGD_BDSM_MMIO_OFFSET 0x1080C0
-
-static uint64_t vfio_igd_quirk_bdsm_read(void *opaque,
-                                          hwaddr addr, unsigned size)
-{
-    VFIOPCIDevice *vdev = opaque;
-    uint64_t offset;
-
-    offset = IGD_BDSM_GEN11 + addr;
-
-    switch (size) {
-    case 1:
-        return pci_get_byte(vdev->pdev.config + offset);
-    case 2:
-        return pci_get_word(vdev->pdev.config + offset);
-    case 4:
-        return pci_get_long(vdev->pdev.config + offset);
-    case 8:
-        return pci_get_quad(vdev->pdev.config + offset);
-    default:
-        hw_error("igd: unsupported read size, %u bytes", size);
-        break;
-    }
-
-    return 0;
-}
-
-static void vfio_igd_quirk_bdsm_write(void *opaque, hwaddr addr,
-                                       uint64_t data, unsigned size)
-{
-    VFIOPCIDevice *vdev = opaque;
-    uint64_t offset;
-
-    offset = IGD_BDSM_GEN11 + addr;
-
-    switch (size) {
-    case 1:
-        pci_set_byte(vdev->pdev.config + offset, data);
-        break;
-    case 2:
-        pci_set_word(vdev->pdev.config + offset, data);
-        break;
-    case 4:
-        pci_set_long(vdev->pdev.config + offset, data);
-        break;
-    case 8:
-        pci_set_quad(vdev->pdev.config + offset, data);
-        break;
-    default:
-        hw_error("igd: unsupported read size, %u bytes", size);
-        break;
-    }
-}
-
-static const MemoryRegionOps vfio_igd_bdsm_quirk = {
-    .read = vfio_igd_quirk_bdsm_read,
-    .write = vfio_igd_quirk_bdsm_write,
-    .endianness = DEVICE_LITTLE_ENDIAN,
-};
+#define IGD_GGC_MMIO_OFFSET     0x108040
+#define IGD_BDSM_MMIO_OFFSET    0x1080C0
 
 void vfio_probe_igd_bar0_quirk(VFIOPCIDevice *vdev, int nr)
 {
-    VFIOQuirk *quirk;
+    VFIOQuirk *ggc_quirk, *bdsm_quirk;
+    VFIOConfigMirrorQuirk *ggc_mirror, *bdsm_mirror;
     int gen;
 
     /*
@@ -465,44 +449,43 @@ void vfio_probe_igd_bar0_quirk(VFIOPCIDevice *vdev, int nr)
      * into MMIO space and read from MMIO space by the Windows driver.
      */
     gen = igd_gen(vdev);
-    if (gen < 11) {
+    if (gen < 6) {
         return;
     }
 
-    quirk = vfio_quirk_alloc(1);
-    quirk->data = vdev;
+    ggc_quirk = vfio_quirk_alloc(1);
+    ggc_mirror = ggc_quirk->data = g_malloc0(sizeof(*ggc_mirror));
+    ggc_mirror->mem = ggc_quirk->mem;
+    ggc_mirror->vdev = vdev;
+    ggc_mirror->bar = nr;
+    ggc_mirror->offset = IGD_GGC_MMIO_OFFSET;
+    ggc_mirror->config_offset = IGD_GMCH;
 
-    memory_region_init_io(&quirk->mem[0], OBJECT(vdev), &vfio_igd_bdsm_quirk,
-                          vdev, "vfio-igd-bdsm-quirk", 8);
-    memory_region_add_subregion_overlap(vdev->bars[0].region.mem,
-                                        IGD_BDSM_MMIO_OFFSET, &quirk->mem[0],
+    memory_region_init_io(ggc_mirror->mem, OBJECT(vdev),
+                          &vfio_generic_mirror_quirk, ggc_mirror,
+                          "vfio-igd-ggc-quirk", 2);
+    memory_region_add_subregion_overlap(vdev->bars[nr].region.mem,
+                                        ggc_mirror->offset, ggc_mirror->mem,
                                         1);
 
-    QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, quirk, next);
-}
+    QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, ggc_quirk, next);
 
-static int igd_get_stolen_mb(int gen, uint32_t gmch)
-{
-    int gms;
+    bdsm_quirk = vfio_quirk_alloc(1);
+    bdsm_mirror = bdsm_quirk->data = g_malloc0(sizeof(*bdsm_mirror));
+    bdsm_mirror->mem = bdsm_quirk->mem;
+    bdsm_mirror->vdev = vdev;
+    bdsm_mirror->bar = nr;
+    bdsm_mirror->offset = IGD_BDSM_MMIO_OFFSET;
+    bdsm_mirror->config_offset = (gen < 11) ? IGD_BDSM : IGD_BDSM_GEN11;
 
-    if (gen < 8) {
-        gms = (gmch >> 3) & 0x1f;
-    } else {
-        gms = (gmch >> 8) & 0xff;
-    }
+    memory_region_init_io(bdsm_mirror->mem, OBJECT(vdev),
+                          &vfio_generic_mirror_quirk, bdsm_mirror,
+                          "vfio-igd-bdsm-quirk", (gen < 11) ? 4 : 8);
+    memory_region_add_subregion_overlap(vdev->bars[nr].region.mem,
+                                        bdsm_mirror->offset, bdsm_mirror->mem,
+                                        1);
 
-    if (gen < 9) {
-        if (gms > 0x10) {
-            error_report("Unsupported IGD GMS value 0x%x", gms);
-            return 0;
-        }
-        return gms * 32;
-    } else {
-        if (gms < 0xf0)
-            return gms * 32;
-        else
-            return (gms - 0xf0) * 4 + 4;
-    }
+    QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, bdsm_quirk, next);
 }
 
 void vfio_probe_igd_bar4_quirk(VFIOPCIDevice *vdev, int nr)
@@ -514,7 +497,8 @@ void vfio_probe_igd_bar4_quirk(VFIOPCIDevice *vdev, int nr)
     VFIOQuirk *quirk;
     VFIOIGDQuirk *igd;
     PCIDevice *lpc_bridge;
-    int i, ret, ggms_mb, gms_mb = 0, gen;
+    int i, ret, gen;
+    uint64_t ggms_size, gms_size;
     uint64_t *bdsm_size;
     uint32_t gmch;
     uint16_t cmd_orig, cmd;
@@ -676,13 +660,33 @@ void vfio_probe_igd_bar4_quirk(VFIOPCIDevice *vdev, int nr)
 
     QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, quirk, next);
 
-    /* Determine the size of stolen memory needed for GTT */
-    ggms_mb = (gmch >> (gen < 8 ? 8 : 6)) & 0x3;
-    if (gen > 6) {
-        ggms_mb = 1 << ggms_mb;
+    /*
+     * Allow user to override dsm size using x-igd-gms option, in multiples of
+     * 32MiB. This option should only be used when the desired size cannot be
+     * set from DVMT Pre-Allocated option in host BIOS.
+     */
+    if (vdev->igd_gms) {
+        if (gen < 8) {
+            if (vdev->igd_gms <= 0x10) {
+                gmch &= ~(IGD_GMCH_GEN6_GMS_MASK << IGD_GMCH_GEN6_GMS_SHIFT);
+                gmch |= vdev->igd_gms << IGD_GMCH_GEN6_GMS_SHIFT;
+            } else {
+                error_report(QERR_INVALID_PARAMETER_VALUE,
+                             "x-igd-gms", "0~0x10");
+            }
+        } else {
+            if (vdev->igd_gms <= 0x40) {
+                gmch &= ~(IGD_GMCH_GEN8_GMS_MASK << IGD_GMCH_GEN8_GMS_SHIFT);
+                gmch |= vdev->igd_gms << IGD_GMCH_GEN8_GMS_SHIFT;
+            } else {
+                error_report(QERR_INVALID_PARAMETER_VALUE,
+                             "x-igd-gms", "0~0x40");
+            }
+        }
     }
 
-    gms_mb = igd_get_stolen_mb(gen, gmch);
+    ggms_size = igd_gtt_memory_size(gen, gmch);
+    gms_size = igd_stolen_memory_size(gen, gmch);
 
     /*
      * Request reserved memory for stolen memory via fw_cfg.  VM firmware
@@ -693,7 +697,7 @@ void vfio_probe_igd_bar4_quirk(VFIOPCIDevice *vdev, int nr)
      * config offset 0x5C.
      */
     bdsm_size = g_malloc(sizeof(*bdsm_size));
-    *bdsm_size = cpu_to_le64((ggms_mb + gms_mb) * MiB);
+    *bdsm_size = cpu_to_le64(ggms_size + gms_size);
     fw_cfg_add_file(fw_cfg_find(), "etc/igd-bdsm-size",
                     bdsm_size, sizeof(*bdsm_size));
 
@@ -744,5 +748,6 @@ void vfio_probe_igd_bar4_quirk(VFIOPCIDevice *vdev, int nr)
                      vdev->vbasedev.name);
     }
 
-    trace_vfio_pci_igd_bdsm_enabled(vdev->vbasedev.name, ggms_mb + gms_mb);
+    trace_vfio_pci_igd_bdsm_enabled(vdev->vbasedev.name,
+                                    (ggms_size + gms_size) / MiB);
 }

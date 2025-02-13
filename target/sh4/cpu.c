@@ -25,6 +25,7 @@
 #include "cpu.h"
 #include "migration/vmstate.h"
 #include "exec/exec-all.h"
+#include "exec/translation-block.h"
 #include "fpu/softfloat-helpers.h"
 #include "tcg/tcg.h"
 
@@ -127,6 +128,16 @@ static void superh_cpu_reset_hold(Object *obj, ResetType type)
     set_flush_to_zero(1, &env->fp_status);
 #endif
     set_default_nan_mode(1, &env->fp_status);
+    /* sign bit clear, set all frac bits other than msb */
+    set_float_default_nan_pattern(0b00111111, &env->fp_status);
+    /*
+     * TODO: "SH-4 CPU Core Architecture ADCS 7182230F" doesn't say whether
+     * it detects tininess before or after rounding. Section 6.4 is clear
+     * that flush-to-zero happens when the result underflows, though, so
+     * either this should be "detect ftz after rounding" or else we should
+     * be setting "detect tininess before rounding".
+     */
+    set_float_ftz_detection(float_ftz_before_rounding, &env->fp_status);
 }
 
 static void superh_cpu_disas_set_info(CPUState *cpu, disassemble_info *info)
@@ -248,6 +259,7 @@ static const struct SysemuCPUOps sh4_sysemu_ops = {
 
 static const TCGCPUOps superh_tcg_ops = {
     .initialize = sh4_translate_init,
+    .translate_code = sh4_translate_code,
     .synchronize_from_tb = superh_cpu_synchronize_from_tb,
     .restore_state_to_opc = superh_restore_state_to_opc,
 

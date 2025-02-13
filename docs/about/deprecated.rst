@@ -24,12 +24,6 @@ should exclusively use a non-deprecated machine type, with use of the most
 recent version highly recommended. Non-versioned machine types follow the
 general feature deprecation policy.
 
-Prior to the 2.10.0 release there was no official policy on how
-long features would be deprecated prior to their removal, nor
-any documented list of which features were deprecated. Thus
-any features deprecated prior to 2.10.0 will be treated as if
-they were first deprecated in the 2.10.0 release.
-
 What follows is a list of all features currently marked as
 deprecated.
 
@@ -74,11 +68,18 @@ configurations (e.g. -smp drawers=1,books=1,clusters=1 for x86 PC machine) is
 marked deprecated since 9.0, users have to ensure that all the topology members
 described with -smp are supported by the target machine.
 
-``-runas`` (since 9.1)
-----------------------
+``-old-param`` option for booting Arm kernels via param_struct (since 10.0)
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-Use ``-run-with user=..`` instead.
-
+The ``-old-param`` command line option is specific to Arm targets:
+it is used when directly booting a guest kernel to pass it the
+command line and other information via the old ``param_struct`` ABI,
+rather than the newer ATAGS or DTB mechanisms. This option was only
+ever needed to support ancient kernels on some old board types
+like the ``akita`` or ``terrier``; it has been deprecated in the
+kernel since 2001. None of the board types QEMU supports need
+``param_struct`` support, so this option has been deprecated and will
+be removed in a future QEMU version.
 
 User-mode emulator command line arguments
 -----------------------------------------
@@ -216,6 +217,34 @@ is going to be so much slower it wouldn't make sense for any serious
 instrumentation. Due to implementation differences there will also be
 anomalies in things like memory instrumentation.
 
+32-bit host operating systems (since 10.0)
+''''''''''''''''''''''''''''''''''''''''''
+
+Keeping 32-bit host support alive is a substantial burden for the
+QEMU project.  Thus QEMU will in future drop the support for all
+32-bit host systems.
+
+linux-user mode CPUs
+--------------------
+
+iwMMXt emulation and the ``pxa`` CPUs (since 10.0)
+''''''''''''''''''''''''''''''''''''''''''''''''''
+
+The ``pxa`` CPU family (``pxa250``, ``pxa255``, ``pxa260``,
+``pxa261``, ``pxa262``, ``pxa270-a0``, ``pxa270-a1``, ``pxa270``,
+``pxa270-b0``, ``pxa270-b1``, ``pxa270-c0``, ``pxa270-c5``) are no
+longer used in system emulation, because all the machine types which
+used these CPUs were removed in the QEMU 9.2 release. These CPUs can
+now only be used in linux-user mode, and to do that you would have to
+explicitly select one of these CPUs with the ``-cpu`` command line
+option or the ``QEMU_CPU`` environment variable.
+
+We don't believe that anybody is using the iwMMXt emulation, and we do
+not have any tests to validate it or any real hardware or similar
+known-good implementation to test against. GCC is in the process of
+dropping their support for iwMMXt codegen. These CPU types are
+therefore deprecated in QEMU, and will be removed in a future release.
+
 System emulator CPUs
 --------------------
 
@@ -262,14 +291,6 @@ The ``ref405ep`` machine and PPC 405 CPU have no known users, firmware
 images are not available, OpenWRT dropped support in 2019, U-Boot in
 2017, Linux also is dropping support in 2024. It is time to let go of
 this ancient hardware and focus on newer CPUs and platforms.
-
-Arm ``tacoma-bmc`` machine (since 9.1)
-''''''''''''''''''''''''''''''''''''''''
-
-The ``tacoma-bmc`` machine was a board including an AST2600 SoC based
-BMC and a witherspoon like OpenPOWER system. It was used for bring up
-of the AST2600 SoC in labs.  It can be easily replaced by the
-``rainier-bmc`` machine which is a real product.
 
 Big-Endian variants of MicroBlaze ``petalogix-ml605`` and ``xlnx-zynqmp-pmu`` machines (since 9.2)
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''

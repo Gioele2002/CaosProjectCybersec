@@ -28,6 +28,7 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #ifdef CONFIG_TCG
+#include "exec/translation-block.h"
 #include "hw/core/tcg-cpu-ops.h"
 #endif /* CONFIG_TCG */
 #include "internals.h"
@@ -41,9 +42,9 @@
 #include "hw/intc/armv7m_nvic.h"
 #endif /* CONFIG_TCG */
 #endif /* !CONFIG_USER_ONLY */
-#include "sysemu/tcg.h"
-#include "sysemu/qtest.h"
-#include "sysemu/hw_accel.h"
+#include "system/tcg.h"
+#include "system/qtest.h"
+#include "system/hw_accel.h"
 #include "kvm_arm.h"
 #include "disas/capstone.h"
 #include "fpu/softfloat.h"
@@ -166,18 +167,6 @@ void arm_register_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook,
     entry->opaque = opaque;
 
     QLIST_INSERT_HEAD(&cpu->el_change_hooks, entry, node);
-}
-
-/*
- * Set the float_status behaviour to match the Arm defaults:
- *  * tininess-before-rounding
- *  * 2-input NaN propagation prefers SNaN over QNaN, and then
- *    operand A over operand B (see FPProcessNaNs() pseudocode)
- */
-static void arm_set_default_fp_behaviours(float_status *s)
-{
-    set_float_detect_tininess(float_tininess_before_rounding, s);
-    set_float_2nan_prop_rule(float_2nan_prop_s_ab, s);
 }
 
 static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
@@ -557,14 +546,20 @@ static void arm_cpu_reset_hold(Object *obj, ResetType type)
         env->sau.ctrl = 0;
     }
 
-    set_flush_to_zero(1, &env->vfp.standard_fp_status);
-    set_flush_inputs_to_zero(1, &env->vfp.standard_fp_status);
-    set_default_nan_mode(1, &env->vfp.standard_fp_status);
-    set_default_nan_mode(1, &env->vfp.standard_fp_status_f16);
-    arm_set_default_fp_behaviours(&env->vfp.fp_status);
-    arm_set_default_fp_behaviours(&env->vfp.standard_fp_status);
-    arm_set_default_fp_behaviours(&env->vfp.fp_status_f16);
-    arm_set_default_fp_behaviours(&env->vfp.standard_fp_status_f16);
+    set_flush_to_zero(1, &env->vfp.fp_status[FPST_STD]);
+    set_flush_inputs_to_zero(1, &env->vfp.fp_status[FPST_STD]);
+    set_default_nan_mode(1, &env->vfp.fp_status[FPST_STD]);
+    set_default_nan_mode(1, &env->vfp.fp_status[FPST_STD_F16]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_A32]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_A64]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_STD]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_A32_F16]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_A64_F16]);
+    arm_set_default_fp_behaviours(&env->vfp.fp_status[FPST_STD_F16]);
+    arm_set_ah_fp_behaviours(&env->vfp.fp_status[FPST_AH]);
+    set_flush_to_zero(1, &env->vfp.fp_status[FPST_AH]);
+    set_flush_inputs_to_zero(1, &env->vfp.fp_status[FPST_AH]);
+    arm_set_ah_fp_behaviours(&env->vfp.fp_status[FPST_AH_F16]);
 
 #ifndef CONFIG_USER_ONLY
     if (kvm_enabled()) {
@@ -1548,39 +1543,39 @@ static void arm_cpu_initfn(Object *obj)
  * 0 means "unset, use the default value". That default might vary depending
  * on the CPU type, and is set in the realize fn.
  */
-static Property arm_cpu_gt_cntfrq_property =
+static const Property arm_cpu_gt_cntfrq_property =
             DEFINE_PROP_UINT64("cntfrq", ARMCPU, gt_cntfrq_hz, 0);
 
-static Property arm_cpu_reset_cbar_property =
+static const Property arm_cpu_reset_cbar_property =
             DEFINE_PROP_UINT64("reset-cbar", ARMCPU, reset_cbar, 0);
 
-static Property arm_cpu_reset_hivecs_property =
+static const Property arm_cpu_reset_hivecs_property =
             DEFINE_PROP_BOOL("reset-hivecs", ARMCPU, reset_hivecs, false);
 
 #ifndef CONFIG_USER_ONLY
-static Property arm_cpu_has_el2_property =
+static const Property arm_cpu_has_el2_property =
             DEFINE_PROP_BOOL("has_el2", ARMCPU, has_el2, true);
 
-static Property arm_cpu_has_el3_property =
+static const Property arm_cpu_has_el3_property =
             DEFINE_PROP_BOOL("has_el3", ARMCPU, has_el3, true);
 #endif
 
-static Property arm_cpu_cfgend_property =
+static const Property arm_cpu_cfgend_property =
             DEFINE_PROP_BOOL("cfgend", ARMCPU, cfgend, false);
 
-static Property arm_cpu_has_vfp_property =
+static const Property arm_cpu_has_vfp_property =
             DEFINE_PROP_BOOL("vfp", ARMCPU, has_vfp, true);
 
-static Property arm_cpu_has_vfp_d32_property =
+static const Property arm_cpu_has_vfp_d32_property =
             DEFINE_PROP_BOOL("vfp-d32", ARMCPU, has_vfp_d32, true);
 
-static Property arm_cpu_has_neon_property =
+static const Property arm_cpu_has_neon_property =
             DEFINE_PROP_BOOL("neon", ARMCPU, has_neon, true);
 
-static Property arm_cpu_has_dsp_property =
+static const Property arm_cpu_has_dsp_property =
             DEFINE_PROP_BOOL("dsp", ARMCPU, has_dsp, true);
 
-static Property arm_cpu_has_mpu_property =
+static const Property arm_cpu_has_mpu_property =
             DEFINE_PROP_BOOL("has-mpu", ARMCPU, has_mpu, true);
 
 /* This is like DEFINE_PROP_UINT32 but it doesn't set the default value,
@@ -1588,7 +1583,7 @@ static Property arm_cpu_has_mpu_property =
  * the right value for that particular CPU type, and we don't want
  * to override that with an incorrect constant value.
  */
-static Property arm_cpu_pmsav7_dregion_property =
+static const Property arm_cpu_pmsav7_dregion_property =
             DEFINE_PROP_UNSIGNED_NODEFAULT("pmsav7-dregion", ARMCPU,
                                            pmsav7_dregion,
                                            qdev_prop_uint32, uint32_t);
@@ -2634,7 +2629,7 @@ static ObjectClass *arm_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
-static Property arm_cpu_properties[] = {
+static const Property arm_cpu_properties[] = {
     DEFINE_PROP_UINT64("midr", ARMCPU, midr, 0),
     DEFINE_PROP_UINT64("mp-affinity", ARMCPU,
                         mp_affinity, ARM64_AFFINITY_INVALID),
@@ -2642,7 +2637,8 @@ static Property arm_cpu_properties[] = {
     DEFINE_PROP_INT32("core-count", ARMCPU, core_count, -1),
     /* True to default to the backward-compat old CNTFRQ rather than 1Ghz */
     DEFINE_PROP_BOOL("backcompat-cntfrq", ARMCPU, backcompat_cntfrq, false),
-    DEFINE_PROP_END_OF_LIST()
+    DEFINE_PROP_BOOL("backcompat-pauth-default-use-qarma5", ARMCPU,
+                      backcompat_pauth_default_use_qarma5, false),
 };
 
 static const gchar *arm_gdb_arch_name(CPUState *cs)
@@ -2672,6 +2668,7 @@ static const struct SysemuCPUOps arm_sysemu_ops = {
 #ifdef CONFIG_TCG
 static const TCGCPUOps arm_tcg_ops = {
     .initialize = arm_translate_init,
+    .translate_code = arm_translate_code,
     .synchronize_from_tb = arm_cpu_synchronize_from_tb,
     .debug_excp_handler = arm_debug_excp_handler,
     .restore_state_to_opc = arm_restore_state_to_opc,
@@ -2743,6 +2740,9 @@ static void cpu_register_class_init(ObjectClass *oc, void *data)
 
     acc->info = data;
     cc->gdb_core_xml_file = "arm-core.xml";
+    if (acc->info->deprecation_note) {
+        cc->deprecation_note = acc->info->deprecation_note;
+    }
 }
 
 void arm_cpu_register(const ARMCPUInfo *info)
@@ -2755,7 +2755,7 @@ void arm_cpu_register(const ARMCPUInfo *info)
     };
 
     type_info.name = g_strdup_printf("%s-" TYPE_ARM_CPU, info->name);
-    type_register(&type_info);
+    type_register_static(&type_info);
     g_free((void *)type_info.name);
 }
 

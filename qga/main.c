@@ -19,9 +19,9 @@
 #include <sys/wait.h>
 #endif
 #include "qemu/help-texts.h"
-#include "qapi/qmp/json-parser.h"
-#include "qapi/qmp/qdict.h"
-#include "qapi/qmp/qjson.h"
+#include "qobject/json-parser.h"
+#include "qobject/qdict.h"
+#include "qobject/qjson.h"
 #include "guest-agent-core.h"
 #include "qga-qapi-init-commands.h"
 #include "qapi/error.h"
@@ -1519,7 +1519,7 @@ static int run_agent_once(GAState *s)
         return EXIT_FAILURE;
     }
 
-    g_main_loop_run(ga_state->main_loop);
+    g_main_loop_run(s->main_loop);
 
     if (s->channel) {
         ga_channel_free(s->channel);

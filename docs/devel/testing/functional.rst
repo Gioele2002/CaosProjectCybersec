@@ -59,11 +59,12 @@ To run a single test file without the meson test runner, you can also
 execute the file directly by specifying two environment variables first,
 the PYTHONPATH that has to include the python folder and the tests/functional
 folder of the source tree, and QEMU_TEST_QEMU_BINARY that has to point
-to the QEMU binary that should be used for the test, for example::
+to the QEMU binary that should be used for the test. The current working
+directory should be your build folder. For example::
 
   $ export PYTHONPATH=../python:../tests/functional
   $ export QEMU_TEST_QEMU_BINARY=$PWD/qemu-system-x86_64
-  $ python3 ../tests/functional/test_file.py
+  $ pyvenv/bin/python3 ../tests/functional/test_file.py
 
 The test framework will automatically purge any scratch files created during
 the tests. If needing to debug a failed test, it is possible to keep these
@@ -349,6 +350,14 @@ the code snippet below:
 
 Tests should not live in this state forever and should either be fixed
 or eventually removed.
+
+QEMU_TEST_ALLOW_SLOW
+^^^^^^^^^^^^^^^^^^^^
+Tests that have a very long runtime and might run into timeout issues
+e.g. if the QEMU binary has been compiled with debugging options enabled.
+To avoid these timeout issues by default and to save some precious CPU
+cycles during normal testing, such tests are disabled by default unless
+the QEMU_TEST_ALLOW_SLOW environment variable has been set.
 
 
 .. _unittest: https://docs.python.org/3/library/unittest.html

@@ -23,12 +23,12 @@
 #include "qemu/bswap.h"
 #include "qemu/cutils.h"
 #include "qemu/guest-random.h"
-#include "sysemu/device_tree.h"
+#include "system/device_tree.h"
 #include "hw/loader.h"
 #include "hw/boards.h"
 #include "qemu/config-file.h"
 #include "qapi/qapi-commands-machine.h"
-#include "qapi/qmp/qdict.h"
+#include "qobject/qdict.h"
 #include "monitor/hmp.h"
 
 #include <libfdt.h>

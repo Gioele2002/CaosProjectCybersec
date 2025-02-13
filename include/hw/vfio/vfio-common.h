@@ -29,10 +29,10 @@
 #ifdef CONFIG_LINUX
 #include <linux/vfio.h>
 #endif
-#include "sysemu/sysemu.h"
+#include "system/system.h"
 #include "hw/vfio/vfio-container-base.h"
-#include "sysemu/host_iommu_device.h"
-#include "sysemu/iommufd.h"
+#include "system/host_iommu_device.h"
+#include "system/iommufd.h"
 
 #define VFIO_MSG_PREFIX "vfio %s: "
 
@@ -143,7 +143,7 @@ typedef struct VFIODevice {
     OnOffAuto pre_copy_dirty_page_tracking;
     OnOffAuto device_dirty_page_tracking;
     bool dirty_pages_supported;
-    bool dirty_tracking;
+    bool dirty_tracking; /* Protected by BQL */
     bool iommu_dirty_tracking;
     HostIOMMUDevice *hiod;
     int devid;
@@ -252,6 +252,7 @@ bool vfio_device_hiod_realize(VFIODevice *vbasedev, Error **errp);
 bool vfio_attach_device(char *name, VFIODevice *vbasedev,
                         AddressSpace *as, Error **errp);
 void vfio_detach_device(VFIODevice *vbasedev);
+VFIODevice *vfio_get_vfio_device(Object *obj);
 
 int vfio_kvm_device_add_fd(int fd, Error **errp);
 int vfio_kvm_device_del_fd(int fd, Error **errp);
@@ -296,8 +297,8 @@ bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp);
 void vfio_migration_exit(VFIODevice *vbasedev);
 
 int vfio_bitmap_alloc(VFIOBitmap *vbmap, hwaddr size);
-bool
-vfio_devices_all_running_and_mig_active(const VFIOContainerBase *bcontainer);
+bool vfio_devices_all_dirty_tracking_started(
+    const VFIOContainerBase *bcontainer);
 bool
 vfio_devices_all_device_dirty_tracking(const VFIOContainerBase *bcontainer);
 int vfio_devices_query_dirty_bitmap(const VFIOContainerBase *bcontainer,

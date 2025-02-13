@@ -22,9 +22,9 @@
 #include "qemu/osdep.h"
 #include "disas/dis-asm.h"
 #include "gdbstub/helpers.h"
-#include "sysemu/cpus.h"
-#include "sysemu/hw_accel.h"
-#include "sysemu/tcg.h"
+#include "system/cpus.h"
+#include "system/hw_accel.h"
+#include "system/tcg.h"
 #include "cpu-models.h"
 #include "mmu-hash32.h"
 #include "mmu-hash64.h"
@@ -32,7 +32,7 @@
 #include "qemu/module.h"
 #include "qemu/qemu-print.h"
 #include "qapi/error.h"
-#include "qapi/qmp/qnull.h"
+#include "qobject/qnull.h"
 #include "qapi/visitor.h"
 #include "hw/qdev-properties.h"
 #include "hw/ppc/ppc.h"
@@ -7262,6 +7262,9 @@ static void ppc_cpu_reset_hold(Object *obj, ResetType type)
     /* tininess for underflow is detected before rounding */
     set_float_detect_tininess(float_tininess_before_rounding,
                               &env->fp_status);
+    /* Similarly for flush-to-zero */
+    set_float_ftz_detection(float_ftz_before_rounding, &env->fp_status);
+
     /*
      * PowerPC propagation rules:
      *  1. A if it sNaN or qNaN
@@ -7270,6 +7273,25 @@ static void ppc_cpu_reset_hold(Object *obj, ResetType type)
      */
     set_float_2nan_prop_rule(float_2nan_prop_ab, &env->fp_status);
     set_float_2nan_prop_rule(float_2nan_prop_ab, &env->vec_status);
+    /*
+     * NaN propagation for fused multiply-add:
+     * if fRA is a NaN return it; otherwise if fRB is a NaN return it;
+     * otherwise return fRC. Note that muladd on PPC is (fRA * fRC) + frB
+     * whereas QEMU labels the operands as (a * b) + c.
+     */
+    set_float_3nan_prop_rule(float_3nan_prop_acb, &env->fp_status);
+    set_float_3nan_prop_rule(float_3nan_prop_acb, &env->vec_status);
+    /*
+     * For PPC, the (inf,zero,qnan) case sets InvalidOp, but we prefer
+     * to return an input NaN if we have one (ie c) rather than generating
+     * a default NaN
+     */
+    set_float_infzeronan_rule(float_infzeronan_dnan_never, &env->fp_status);
+    set_float_infzeronan_rule(float_infzeronan_dnan_never, &env->vec_status);
+
+    /* Default NaN: sign bit clear, set frac msb */
+    set_float_default_nan_pattern(0b01000000, &env->fp_status);
+    set_float_default_nan_pattern(0b01000000, &env->vec_status);
 
     for (i = 0; i < ARRAY_SIZE(env->spr_cb); i++) {
         ppc_spr_t *spr = &env->spr_cb[i];
@@ -7395,11 +7417,6 @@ static void ppc_disas_set_info(CPUState *cs, disassemble_info *info)
 #endif
 }
 
-static Property ppc_cpu_properties[] = {
-    /* add default property here */
-    DEFINE_PROP_END_OF_LIST(),
-};
-
 #ifndef CONFIG_USER_ONLY
 #include "hw/core/sysemu-cpu-ops.h"
 
@@ -7417,6 +7434,7 @@ static const struct SysemuCPUOps ppc_sysemu_ops = {
 
 static const TCGCPUOps ppc_tcg_ops = {
   .initialize = ppc_translate_init,
+  .translate_code = ppc_translate_code,
   .restore_state_to_opc = ppc_restore_state_to_opc,
 
 #ifdef CONFIG_USER_ONLY
@@ -7449,7 +7467,6 @@ static void ppc_cpu_class_init(ObjectClass *oc, void *data)
     device_class_set_parent_unrealize(dc, ppc_cpu_unrealize,
                                       &pcc->parent_unrealize);
     pcc->pvr_match = ppc_pvr_match_default;
-    device_class_set_props(dc, ppc_cpu_properties);
 
     resettable_class_set_parent_phases(rc, NULL, ppc_cpu_reset_hold, NULL,
                                        &pcc->parent_phases);

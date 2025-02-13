@@ -15,15 +15,15 @@
 #include "target/ppc/cpu.h"
 #include "hw/ppc/spapr.h"
 #include "qapi/error.h"
-#include "sysemu/cpus.h"
-#include "sysemu/kvm.h"
+#include "system/cpus.h"
+#include "system/kvm.h"
 #include "target/ppc/kvm_ppc.h"
 #include "hw/ppc/ppc.h"
 #include "target/ppc/mmu-hash64.h"
 #include "target/ppc/power8-pmu.h"
-#include "sysemu/numa.h"
-#include "sysemu/reset.h"
-#include "sysemu/hw_accel.h"
+#include "system/numa.h"
+#include "system/reset.h"
+#include "system/hw_accel.h"
 #include "qemu/error-report.h"
 
 static void spapr_reset_vcpu(PowerPCCPU *cpu)
@@ -313,6 +313,7 @@ static PowerPCCPU *spapr_create_vcpu(SpaprCpuCore *sc, int i, Error **errp)
         return NULL;
     }
 
+    env->chip_index = sc->node_id;
     env->core_index = cc->core_id;
 
     cpu->node_id = sc->node_id;
@@ -360,9 +361,8 @@ static void spapr_cpu_core_realize(DeviceState *dev, Error **errp)
     }
 }
 
-static Property spapr_cpu_core_properties[] = {
+static const Property spapr_cpu_core_properties[] = {
     DEFINE_PROP_INT32("node-id", SpaprCpuCore, node_id, CPU_UNSET_NUMA_NODE_ID),
-    DEFINE_PROP_END_OF_LIST()
 };
 
 static void spapr_cpu_core_class_init(ObjectClass *oc, void *data)

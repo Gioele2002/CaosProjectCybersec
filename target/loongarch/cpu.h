@@ -283,6 +283,8 @@ typedef struct LoongArchTLB LoongArchTLB;
 #endif
 
 enum loongarch_features {
+    LOONGARCH_FEATURE_LSX,
+    LOONGARCH_FEATURE_LASX,
     LOONGARCH_FEATURE_LBT, /* loongson binary translation extension */
     LOONGARCH_FEATURE_PMU,
 };
@@ -383,8 +385,6 @@ typedef struct CPUArchState {
     bool load_elf;
     uint64_t elf_address;
     uint32_t mp_state;
-    /* Store ipistate to access from this struct */
-    DeviceState *ipistate;
 
     struct loongarch_boot_info *boot_info;
 #endif
@@ -404,6 +404,8 @@ struct ArchCPU {
     uint32_t  phy_id;
     OnOffAuto lbt;
     OnOffAuto pmu;
+    OnOffAuto lsx;
+    OnOffAuto lasx;
 
     /* 'compatible' string for this CPU for Linux device trees */
     const char *dtb_compatible;
