@@ -7,7 +7,6 @@
 
 #define S32K3X8EVB_UART0_BASE    0x40328000  // Define your custom UART base address
 
-// Define the custom UART registers (you may need to add more registers)
 #define S32K3X8EVB_UART_BAUD    (S32K3X8EVB_UART0_BASE + 0x10)
 #define S32K3X8EVB_UART_CTRL    (S32K3X8EVB_UART0_BASE + 0x18)
 #define S32K3X8EVB_UART_DATA    (S32K3X8EVB_UART0_BASE + 0x1C)

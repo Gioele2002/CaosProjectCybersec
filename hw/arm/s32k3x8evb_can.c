@@ -69,7 +69,7 @@ void s32k3x8evb_can_write(void *opaque, hwaddr addr, uint64_t val, unsigned size
                 qemu_log_mask(LOG_UNIMP, "✅ Loopback Mode: RXBUF = 0x%08X\n", (uint32_t)s->rxbuf);
             }
 
-            // Trigger Interrupt (if enabled)
+            // Trigger Interrupt (
             qemu_set_irq(s->can_irq, 1);
             break;
 
